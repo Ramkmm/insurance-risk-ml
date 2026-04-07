@@ -1,0 +1,6 @@
+house_age,location_risk,roof_type,past_claims,property_value,claim_occurred
+10,0.2,1,0,500000,0
+20,0.8,2,2,300000,1
+5,0.1,1,0,700000,0
+30,0.9,3,3,200000,1
+15,0.4,2,1,400000,0

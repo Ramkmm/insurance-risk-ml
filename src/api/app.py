@@ -1,47 +1,42 @@
 from fastapi import FastAPI
-import joblib
-import pandas as pd
-
-app = FastAPI()
-
-model = joblib.load("models/risk_model.pkl")
-
-@app.get("/")
-def home():
-    return {"message": "Insurance Risk API Running"}
-
-from fastapi import FastAPI
+from pydantic import BaseModel
 import joblib
 import pandas as pd
 import os
-import datetime
-import json
 
 app = FastAPI()
 
-# Load model
+# ✅ LOAD MODEL
 model_path = os.path.join(os.path.dirname(__file__), "../../models/risk_model.pkl")
 model = joblib.load(model_path)
 
+# ✅ DEFINE INPUT CLASS FIRST
+class InsuranceInput(BaseModel):
+    house_age: int
+    location_risk: float
+    roof_type: int
+    past_claims: int
+    property_value: float
+
+# ✅ HOME ROUTE
 @app.get("/")
 def home():
     return {"message": "Insurance Risk API Running"}
 
+# ✅ PREDICT ROUTE
 @app.post("/predict")
-def predict(data: dict):
+def predict(data: InsuranceInput):
 
-    # ✅ MUST be indented
+    data = data.dict()
+
     model_features = ["house_age", "location_risk", "roof_type", "past_claims", "property_value"]
-
     filtered_data = {key: data[key] for key in model_features}
 
     df = pd.DataFrame([filtered_data])
 
-    # Prediction
     risk_score = model.predict_proba(df)[0][1]
     premium = 500 + (risk_score * 2000)
 
-    # Risk category
     if risk_score < 0.3:
         category = "Low Risk"
     elif risk_score < 0.7:

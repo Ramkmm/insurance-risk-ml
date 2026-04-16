@@ -1,0 +1,35 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: SSH into EC2 and deploy
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_KEY }}
+        script: |
+          cd /home/ubuntu
+
+          # Pull latest code
+          if [ ! -d "insurance-risk-app" ]; then
+            git clone https://github.com/YOUR_USERNAME/insurance-risk-app.git
+          fi
+
+          cd insurance-risk-app
+          git pull origin main
+
+          # Restart containers
+          docker-compose down --remove-orphans
+          docker-compose up -d --build

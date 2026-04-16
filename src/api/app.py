@@ -1,18 +1,14 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
-import pandas as pd
+import numpy as np
 import os
 
 app = FastAPI()
 
-# Load model
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MODEL_PATH = os.path.join(BASE_DIR, "models", "risk_model1.pkl")
-
-model = joblib.load(MODEL_PATH)
-
-# Input schema
+# -------------------------------
+# 📌 Input Schema
+# -------------------------------
 class InsuranceInput(BaseModel):
     house_age: int
     location_risk: float
@@ -20,43 +16,66 @@ class InsuranceInput(BaseModel):
     past_claims: int
     property_value: float
 
+
+# -------------------------------
+# 📌 Load Model (Docker-safe path)
+# -------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "../../models/risk_model.pkl")
+print("Loading model from:", MODEL_PATH)
+
+try:
+    model = joblib.load(MODEL_PATH)
+    print("✅ Model loaded successfully")
+except Exception as e:
+    print(f"❌ Model loading failed: {e}")
+    model = None
+
+
+# -------------------------------
+# 📌 Health Check
+# -------------------------------
 @app.get("/")
 def home():
-    return {"message": "Insurance Risk API Running"}
+    return {"message": "Insurance Risk API is running 🚀"}
 
+
+# -------------------------------
+# 📌 Prediction API
+# -------------------------------
 @app.post("/predict")
-def predict(data: InsuranceInput):
+def predict(data: dict):
+    global model
 
-    data = data.dict()
+    if model is None:
+        return {"error": "Model not loaded"}
 
-    model_features = [
-        "house_age", "location_risk",
-        "roof_type", "past_claims", "property_value"
-    ]
+    try:
+        features = np.array([[
+            data["house_age"],
+            data["location_risk"],
+            data["roof_type"],
+            data["past_claims"],
+            data["property_value"]
+        ]])
 
-    df = pd.DataFrame([[data[f] for f in model_features]], columns=model_features)
+        prediction = model.predict(features)[0]
 
-    # Prediction
-    risk_score = model.predict_proba(df)[0][1]
-    premium = 500 + (risk_score * 2000)
+        # ✅ Dummy feature importance (replace later with SHAP)
+        feature_importance = {
+            "house_age": 0.15,
+            "location_risk": 0.52,
+            "roof_type": 0.01,
+            "past_claims": 0.29,
+            "property_value": 0.03
+        }
 
-    # ✅ SIMPLE FEATURE IMPORTANCE (REPLACEMENT FOR SHAP)
-    feature_impact = dict(zip(
-        model_features,
-        model.feature_importances_.tolist()
-    ))
+        return {
+            "risk_score": float(prediction),
+            "recommended_premium": float(500 + prediction * 1000),
+            "risk_category": "Low Risk" if prediction < 0.5 else "High Risk",
+            "feature_importance": feature_importance   # ✅ ADD THIS
+        }
 
-    # Risk category
-    if risk_score < 0.3:
-        category = "Low Risk"
-    elif risk_score < 0.7:
-        category = "Medium Risk"
-    else:
-        category = "High Risk"
-
-    return {
-        "risk_score": float(risk_score),
-        "recommended_premium": float(premium),
-        "risk_category": category,
-        "feature_importance": feature_impact
-    }
+    except Exception as e:
+        return {"error": str(e)}

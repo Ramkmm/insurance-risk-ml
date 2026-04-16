@@ -3,7 +3,9 @@ import requests
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# Page config
 st.set_page_config(page_title="Insurance Risk Predictor")
+
 st.title("🏠 Insurance Risk Prediction System")
 st.write("Enter property details to calculate risk score and premium")
 
@@ -17,7 +19,7 @@ property_value = st.number_input("Property Value", value=500000)
 # Button
 if st.button("Predict Risk"):
 
-    url = "https://insurance-risk-ml.onrender.com/predict"
+    url = "http://127.0.0.1:8000/predict"
 
     data = {
         "house_age": house_age,
@@ -33,31 +35,33 @@ if st.button("Predict Risk"):
         if response.status_code == 200:
             result = response.json()
 
-            # ✅ Results
-            st.success(f"Risk Score: {result['risk_score']:.2f}")
-            st.info(f"Recommended Premium: ₹{result['recommended_premium']:.2f}")
-            st.warning(f"Risk Category: {result['risk_category']}")
+            # ✅ Handle correct response
+            if "risk_score" in result:
+                st.success(f"Risk Score: {result['risk_score']:.4f}")
+                st.info(f"Recommended Premium: ₹{result['recommended_premium']:.2f}")
+                st.warning(f"Risk Category: {result['risk_category']}")
 
-            # ✅ Feature Importance (SHAP)
-            feature_imp = result.get("feature_importance", {})
+                # ✅ Feature Importance
+                feature_imp = result.get("feature_importance", {})
 
-            if feature_imp:
-                st.subheader("📊 Feature Impact (Why this risk?)")
+                if feature_imp:
+                    st.subheader("📊 Feature Impact (Why this risk?)")
 
-                features = list(feature_imp.keys())
-                values = list(feature_imp.values())
+                    features = list(feature_imp.keys())
+                    values = list(feature_imp.values())
 
-                fig, ax = plt.subplots()
+                    fig, ax = plt.subplots()
+                    ax.barh(features, values)
+                    ax.set_xlabel("Impact on Risk Score")
+                    ax.set_ylabel("Features")
+                    ax.set_title("Feature Importance")
 
-                ax.barh(features, values)
-                ax.set_xlabel("Impact on Risk Score")
-                ax.set_ylabel("Features")
-                ax.set_title("Feature Importance")
-
-                st.pyplot(fig)
+                    st.pyplot(fig)
+                else:
+                    st.warning("No feature importance data available")
 
             else:
-                st.warning("No feature importance data available")
+                st.error(f"API Response Error: {result}")
 
         else:
             st.error(f"API Error: {response.status_code}")

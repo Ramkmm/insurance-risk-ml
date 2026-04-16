@@ -10,26 +10,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-
-    - name: SSH into EC2 and deploy
-      uses: appleboy/ssh-action@v0.1.10
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ubuntu
-        key: ${{ secrets.EC2_KEY }}
-        script: |
-          cd /home/ubuntu
-
-          # Pull latest code
-          if [ ! -d "insurance-risk-app" ]; then
-            git clone https://github.com/YOUR_USERNAME/insurance-risk-app.git
-          fi
-
-          cd insurance-risk-app
-          git pull origin main
-
-          # Restart containers
-          docker-compose down --remove-orphans
-          docker-compose up -d --build
+      - name: SSH into EC2 and deploy
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            cd ~/insurance-risk-ml
+            git pull origin main
+            docker stop insurance-app || true
+            docker rm insurance-app || true
+            docker build -t insurance-app .
+            docker run -d -p 8000:8000 -p 8501:8501 insurance-app

@@ -3,7 +3,12 @@ import joblib
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-app = FastAPI()
+# ✅ Proper FastAPI config (fix Swagger issue)
+app = FastAPI(
+    title="Insurance Risk API",
+    version="1.0.0",
+    openapi_version="3.0.2"
+)
 
 # ---------------- INPUT ----------------
 class InsuranceInput(BaseModel):
@@ -14,12 +19,16 @@ class InsuranceInput(BaseModel):
     property_value: float
 
 # ---------------- LOAD MODEL ----------------
-MODEL_PATH = os.path.join(os.getcwd(), "models", "risk_model1.pkl")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "../../models/risk_model1.pkl")
 
-print("Loading model from:", MODEL_PATH)
-print("🔥 VERSION V3 - APP.PY UPDATED 🔥")
+print("🔥 VERSION V4 - FIXED PATH 🔥")
+print("Working dir:", os.getcwd())
+print("Model path:", MODEL_PATH)
+
 try:
-    print("Files in models:", os.listdir("models"))
+    print("Files in /app:", os.listdir("/app"))
+    print("Files in models:", os.listdir("/app/models"))
     model = joblib.load(MODEL_PATH)
     print("✅ Model loaded successfully")
 except Exception as e:

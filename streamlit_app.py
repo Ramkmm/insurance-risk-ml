@@ -4,22 +4,23 @@ import requests
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Page config
-st.set_page_config(page_title="Insurance Risk Predictor")
+# ---------------- CONFIG ----------------
+st.set_page_config(page_title="Insurance Risk Predictor", layout="centered")
 
 st.title("🏠 Insurance Risk Prediction System")
 st.write("Enter property details to calculate risk score and premium")
 
-# Inputs
+# ---------------- INPUTS ----------------
 house_age = st.slider("House Age", 0, 50, 10)
 location_risk = st.slider("Location Risk (0-1)", 0.0, 1.0, 0.5)
 roof_type = st.selectbox("Roof Type", [1, 2, 3])
 past_claims = st.slider("Past Claims", 0, 5, 1)
 property_value = st.number_input("Property Value", value=500000)
 
-# Button
+# ---------------- BUTTON ----------------
 if st.button("Predict Risk"):
 
+    # ✅ Use ENV or fallback
     url = os.getenv("API_URL", "http://houseinsurancerisk.site/predict")
 
     data = {
@@ -31,41 +32,57 @@ if st.button("Predict Risk"):
     }
 
     try:
-        response = requests.post(url, json=data)
+        # ✅ Add timeout (VERY IMPORTANT)
+        response = requests.post(url, json=data, timeout=10)
 
+        # ---------------- SUCCESS ----------------
         if response.status_code == 200:
             result = response.json()
 
-            # ✅ Handle correct response
             if "risk_score" in result:
                 st.success(f"Risk Score: {result['risk_score']:.4f}")
-                st.info(f"Recommended Premium: ₹{result['recommended_premium']:.2f}")
-                st.warning(f"Risk Category: {result['risk_category']}")
+                st.info(f"Recommended Premium: ₹{result.get('recommended_premium', 0):.2f}")
+                st.warning(f"Risk Category: {result.get('risk_category', 'N/A')}")
 
-                # ✅ Feature Importance
-                feature_imp = result.get("feature_importance", {})
+                # ---------------- FEATURE IMPORTANCE ----------------
+                feature_imp = result.get("feature_importance")
 
-                if feature_imp:
+                if isinstance(feature_imp, dict) and len(feature_imp) > 0:
                     st.subheader("📊 Feature Impact (Why this risk?)")
 
-                    features = list(feature_imp.keys())
-                    values = list(feature_imp.values())
+                    df = pd.DataFrame({
+                        "Feature": list(feature_imp.keys()),
+                        "Impact": list(feature_imp.values())
+                    }).sort_values(by="Impact", ascending=True)
 
                     fig, ax = plt.subplots()
-                    ax.barh(features, values)
+                    ax.barh(df["Feature"], df["Impact"])
                     ax.set_xlabel("Impact on Risk Score")
-                    ax.set_ylabel("Features")
                     ax.set_title("Feature Importance")
 
                     st.pyplot(fig)
+
                 else:
-                    st.warning("No feature importance data available")
+                    st.info("No feature importance available")
 
             else:
-                st.error(f"API Response Error: {result}")
+                st.error(f"Unexpected API Response: {result}")
 
+        # ---------------- API ERROR ----------------
         else:
-            st.error(f"API Error: {response.status_code}")
+            try:
+                err = response.json()
+            except:
+                err = response.text
+
+            st.error(f"API Error {response.status_code}: {err}")
+
+    # ---------------- REQUEST FAILURE ----------------
+    except requests.exceptions.Timeout:
+        st.error("⏱️ Request timed out. Try again.")
+
+    except requests.exceptions.ConnectionError:
+        st.error("🔌 Cannot connect to API. Check server.")
 
     except Exception as e:
-        st.error(f"Request Failed: {e}")
+        st.error(f"❌ Unexpected error: {e}")

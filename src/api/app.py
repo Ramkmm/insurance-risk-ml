@@ -2,6 +2,15 @@ import os
 import joblib
 from fastapi import FastAPI
 from pydantic import BaseModel
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+logger = logging.getLogger(__name__)
+
 
 # ✅ Proper FastAPI config (fix Swagger issue)
 app = FastAPI(
@@ -42,7 +51,10 @@ def home():
 
 @app.post("/predict")
 def predict(data: InsuranceInput):
+    logger.info(f"Incoming request: {data}")
+
     if model is None:
+        logger.error("Model not loaded")
         return {"error": "Model not loaded"}
 
     input_data = [[

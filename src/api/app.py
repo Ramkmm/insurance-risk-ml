@@ -29,7 +29,7 @@ class InsuranceInput(BaseModel):
 
 # ---------------- LOAD MODEL ----------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "../../models/risk_model.pkl")
+MODEL_PATH = os.path.join(BASE_DIR, "../../models/risk_model1.pkl")
 
 print("🔥 VERSION V4 - FIXED PATH 🔥")
 print("Working dir:", os.getcwd())

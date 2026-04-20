@@ -1,39 +1,68 @@
-name: Deploy Insurance App
+name: Build & Deploy Insurance App
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
 
 jobs:
-  build-and-deploy:
+  build-test-deploy:
     runs-on: ubuntu-latest
 
     steps:
 
+    # 1️⃣ Checkout
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Login to DockerHub
+    # 2️⃣ Setup Python
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+
+    # 3️⃣ Install dependencies
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+
+    # 4️⃣ 🔥 VALIDATION (THIS SAVES YOU)
+    - name: Validate FastAPI app
+      run: |
+        python -m py_compile src/api/app.py
+
+    # 5️⃣ Test API startup
+    - name: Run API test
+      run: |
+        uvicorn src.api.app:app --host 127.0.0.1 --port 8000 &
+        sleep 5
+        curl -f http://127.0.0.1:8000 || exit 1
+
+    # 6️⃣ Build Docker
+    - name: Build Docker image
+      run: |
+        docker build -t ramkmm/insurance-api:latest .
+
+    # 7️⃣ Push to DockerHub
+    - name: Docker Login
       run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-    - name: Build Docker Image
-      run: docker build -t ramkmm/insurance-api:latest .
+    - name: Push Image
+      run: |
+        docker push ramkmm/insurance-api:latest
 
-    - name: Push to Docker Hub
-      run: docker push ramkmm/insurance-api:latest
-
-    - name: Deploy on EC2
+    # 8️⃣ Deploy to EC2
+    - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
+        username: ubuntu
         key: ${{ secrets.EC2_KEY }}
         script: |
           docker stop insurance-app || true
           docker rm insurance-app || true
           docker pull ramkmm/insurance-api:latest
           docker run -d \
+            --restart always \
             --name insurance-app \
             -p 8000:8000 \
             -p 8501:8501 \

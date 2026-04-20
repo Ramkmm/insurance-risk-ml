@@ -1,20 +1,34 @@
-FROM python:3.10-slim
+# -------- Stage 1: Builder --------
+FROM python:3.10-slim as builder
 
-# Set working directory
 WORKDIR /app
 
-# Copy everything
-COPY . .
+COPY requirements.txt .
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --user -r requirements.txt
 
-# Expose ports
-EXPOSE 8000
-EXPOSE 8501
+# -------- Stage 2: Final Image --------
+FROM python:3.10-slim
 
-# Run API + Streamlit properly
-CMD ["sh", "-c", "uvicorn src.api.app:app --host 0.0.0.0 --port 8000 & exec streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0"]
+WORKDIR /app
+
+# Copy only installed packages
+COPY --from=builder /root/.local /root/.local
+
+# Add to PATH
+ENV PATH=/root/.local/bin:$PATH
+
+# Copy only required files
+COPY src ./src
+COPY streamlit_app.py .
+COPY models ./models
+
+# Remove cache + reduce size
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+EXPOSE 8000 8501
+
+CMD ["sh", "-c", "uvicorn src.api.app:app --host 0.0.0.0 --port 8000 & streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 CMD curl -f http://localhost:8000/ || exit 1

@@ -61,8 +61,7 @@ def predict(data: InsuranceInput):
     recommended_premium = data.property_value * (0.01 + risk_score * 0.05)
 
     return {
-        "risk_score": risk_score,
-        "risk_category": "Low Risk" if risk_score < 0.5 else "High Risk",
-        "recommended_premium": round(recommended_premium, 2)
-    }
-    }
+         "risk_score": risk_score,
+         "risk_category": "Low Risk" if risk_score < 0.5 else "High Risk",
+         "recommended_premium": round(recommended_premium, 2)
+}

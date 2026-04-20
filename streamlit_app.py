@@ -19,7 +19,7 @@ property_value = st.number_input("Property Value", value=500000)
 # Button
 if st.button("Predict Risk"):
 
-    url = "http://houseinsurancerisk.site/predict"
+    url = os.getenv("API_URL", "http://127.0.0.1:8000/predict")
 
     data = {
         "house_age": house_age,

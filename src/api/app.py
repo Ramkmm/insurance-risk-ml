@@ -55,7 +55,14 @@ def predict(data: InsuranceInput):
 
     prediction = model.predict(input_data)[0]
 
+    risk_score = float(prediction)
+
+    # 🔥 ADD THIS
+    recommended_premium = data.property_value * (0.01 + risk_score * 0.05)
+
     return {
-        "risk_score": float(prediction),
-        "risk_category": "Low Risk" if prediction < 0.5 else "High Risk"
+        "risk_score": risk_score,
+        "risk_category": "Low Risk" if risk_score < 0.5 else "High Risk",
+        "recommended_premium": round(recommended_premium, 2)
+    }
     }

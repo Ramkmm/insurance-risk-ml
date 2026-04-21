@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # ---------------- FASTAPI CONFIG ----------------
 app = FastAPI(
     title="House Insurance Risk API 🚀",
-    version="1.1.0",
+    version="1.2.0",
     description="Predict house insurance risk using ML model",
 )
 
@@ -30,11 +30,13 @@ class InsuranceInput(BaseModel):
 # ---------------- MODEL CONFIG ----------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODEL_PATH = os.path.join(BASE_DIR, "models", "risk_model1.pkl")
+METADATA_PATH = MODEL_PATH.replace(".pkl", "_metadata.pkl")
 
 model = None
+metadata = None  # to hold feature names etc.
 
 def load_model():
-    global model
+    global model, metadata
     try:
         if not os.path.exists(MODEL_PATH):
             raise FileNotFoundError(f"Model not found at {MODEL_PATH}")
@@ -42,9 +44,17 @@ def load_model():
         model = joblib.load(MODEL_PATH)
         logger.info("✅ Model loaded successfully")
 
+        if os.path.exists(METADATA_PATH):
+            metadata = joblib.load(METADATA_PATH)
+            logger.info(f"✅ Metadata loaded from {METADATA_PATH}")
+        else:
+            metadata = None
+            logger.warning(f"⚠️ Metadata file not found at {METADATA_PATH}. Feature importance may be unavailable.")
+
     except Exception as e:
         logger.exception(f"❌ Model loading failed: {e}")
         model = None
+        metadata = None
 
 @app.on_event("startup")
 def startup_event():
@@ -59,6 +69,9 @@ def health():
         "model_loaded": model is not None,
         "model_path": MODEL_PATH,
         "model_exists": os.path.exists(MODEL_PATH),
+        "metadata_loaded": metadata is not None,
+        "metadata_path": METADATA_PATH,
+        "metadata_exists": os.path.exists(METADATA_PATH),
     }
 
 # ---------------- ROOT ----------------
@@ -69,7 +82,7 @@ def root():
         "docs": "/docs",
         "health": "/health",
         "predict": "POST /predict",
-        "version": "1.1.0",
+        "version": "1.2.0",
     }
 
 # ---------------- PREDICT ----------------
@@ -81,6 +94,7 @@ def predict(data: InsuranceInput):
         raise HTTPException(status_code=503, detail="Model not available. Check /health")
 
     try:
+        # Build feature vector in same order as training
         input_data = np.array([[
             data.house_age,
             data.location_risk,
@@ -99,7 +113,42 @@ def predict(data: InsuranceInput):
         base_rate = 0.01
         risk_multiplier = 0.05 + risk_score * 0.10
         value = data.property_value * (base_rate + risk_multiplier)
-        recommended_premium = round(value, 2)  # ✅ numeric, in rupees
+        recommended_premium = round(value, 2)  # numeric, in rupees
+
+        # ---------------- FEATURE IMPORTANCE ----------------
+        feature_importance = None
+        try:
+            if hasattr(model, "feature_importances_"):
+                importances = model.feature_importances_
+
+                # Get feature names from metadata or fallback
+                if metadata and "feature_names" in metadata:
+                    feature_names = metadata["feature_names"]
+                else:
+                    # Fallback: hard-code in same order as training
+                    feature_names = [
+                        "house_age",
+                        "location_risk",
+                        "roof_type",
+                        "past_claims",
+                        "property_value",
+                    ]
+
+                # Ensure lengths match
+                if len(importances) == len(feature_names):
+                    feature_importance = {
+                        name: float(imp)
+                        for name, imp in zip(feature_names, importances)
+                    }
+                else:
+                    logger.warning(
+                        f"Feature importance length mismatch: "
+                        f"{len(importances)} importances vs {len(feature_names)} names"
+                    )
+                    feature_importance = None
+        except Exception as fe:
+            logger.warning(f"Failed to compute feature importance: {fe}")
+            feature_importance = None
 
         response = {
             "risk_score": round(risk_score, 4),
@@ -108,9 +157,10 @@ def predict(data: InsuranceInput):
                 else "Medium Risk" if risk_score < 0.7
                 else "High Risk"
             ),
-            "recommended_premium": recommended_premium,  # ✅ float, no currency symbol
+            "recommended_premium": recommended_premium,
             "property_value": round(float(data.property_value), 2),
             "input_summary": data.dict(),
+            "feature_importance": feature_importance,  # ✅ for Streamlit graph
         }
 
         logger.info(f"📤 Response: {response}")

@@ -1,6 +1,7 @@
 import os
 import joblib
 import logging
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
@@ -13,26 +14,22 @@ logger = logging.getLogger(__name__)
 
 # ---------------- FASTAPI CONFIG ----------------
 app = FastAPI(
-    title="Insurance Risk API",
-    version="1.0.0",
-    openapi_version="3.0.2"
+    title="House Insurance Risk API 🚀",
+    version="1.1.0",
+    description="Predict house insurance risk using ML model",
 )
 
 # ---------------- INPUT MODEL ----------------
 class InsuranceInput(BaseModel):
-    house_age: int = Field(..., ge=0, le=100)
-    location_risk: float = Field(..., ge=0, le=1)
-    roof_type: int = Field(..., ge=1, le=5)
-    past_claims: int = Field(..., ge=0, le=10)
-    property_value: float = Field(..., gt=0)
+    house_age: int = Field(..., ge=0, le=100, description="House age in years")
+    location_risk: float = Field(..., ge=0, le=1, description="Location risk score (0-1)")
+    roof_type: int = Field(..., ge=1, le=5, description="Roof type (1–5)")
+    past_claims: int = Field(..., ge=0, le=10, description="Number of past claims")
+    property_value: float = Field(..., gt=0, description="Property value in rupees")
 
-# ---------------- LOAD MODEL ----------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# ✅ safer absolute path (Docker compatible)
-MODEL_PATH = os.path.abspath(os.path.join(BASE_DIR, "../../models/risk_model1.pkl"))
-
-logger.info(f"📦 Model path: {MODEL_PATH}")
+# ---------------- MODEL CONFIG ----------------
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+MODEL_PATH = os.path.join(BASE_DIR, "models", "risk_model1.pkl")
 
 model = None
 
@@ -49,53 +46,71 @@ def load_model():
         logger.exception(f"❌ Model loading failed: {e}")
         model = None
 
-# ✅ Load model at startup
 @app.on_event("startup")
 def startup_event():
-    logger.info("🚀 Starting Insurance API...")
+    logger.info("🚀 Starting House Insurance Risk API...")
     load_model()
 
-# ---------------- HEALTH CHECK ----------------
+# ---------------- HEALTH ----------------
 @app.get("/health")
 def health():
     return {
-        "status": "ok" if model else "error",
-        "model_loaded": model is not None
+        "status": "healthy" if model is not None else "degraded",
+        "model_loaded": model is not None,
+        "model_path": MODEL_PATH,
+        "model_exists": os.path.exists(MODEL_PATH),
     }
 
 # ---------------- ROOT ----------------
 @app.get("/")
-def home():
-    return {"message": "Insurance Risk API running 🚀"}
+def root():
+    return {
+        "message": "House Insurance Risk API running 🚀",
+        "docs": "/docs",
+        "health": "/health",
+        "predict": "POST /predict",
+        "version": "1.1.0",
+    }
 
 # ---------------- PREDICT ----------------
 @app.post("/predict")
 def predict(data: InsuranceInput):
-    logger.info(f"📥 Incoming request: {data}")
+    logger.info(f"📥 Prediction request: {data.dict()}")
 
     if model is None:
-        logger.error("Model not loaded")
-        raise HTTPException(status_code=500, detail="Model not loaded")
+        raise HTTPException(status_code=503, detail="Model not available. Check /health")
 
     try:
-        input_data = [[
+        input_data = np.array([[
             data.house_age,
             data.location_risk,
             data.roof_type,
             data.past_claims,
             data.property_value
-        ]]
+        ]], dtype=np.float64)
 
         prediction = model.predict(input_data)[0]
         risk_score = float(prediction)
 
-        # ✅ premium logic
-        recommended_premium = data.property_value * (0.01 + risk_score * 0.05)
+        # Clamp risk score between 0 and 1
+        risk_score = max(0.0, min(1.0, risk_score))
+
+        # Premium calculation (INR)
+        base_rate = 0.01
+        risk_multiplier = 0.05 + risk_score * 0.10
+        value = data.property_value * (base_rate + risk_multiplier)
+        recommended_premium = round(value, 2)  # ✅ numeric, in rupees
 
         response = {
             "risk_score": round(risk_score, 4),
-            "risk_category": "Low Risk" if risk_score < 0.5 else "High Risk",
-            "recommended_premium": round(recommended_premium, 2)
+            "risk_category": (
+                "Low Risk" if risk_score < 0.3
+                else "Medium Risk" if risk_score < 0.7
+                else "High Risk"
+            ),
+            "recommended_premium": recommended_premium,  # ✅ float, no currency symbol
+            "property_value": round(float(data.property_value), 2),
+            "input_summary": data.dict(),
         }
 
         logger.info(f"📤 Response: {response}")

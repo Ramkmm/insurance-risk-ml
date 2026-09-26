@@ -6,7 +6,7 @@ dependencies = [
     "fastapi",
     "pydantic",
     "numpy",
-    "scikit-learn",
+    "scipy",
     "joblib",
     "xgboost"
 ]

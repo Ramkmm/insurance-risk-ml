@@ -9,7 +9,7 @@ dependencies = [
     "numpy",
     "scipy",
     "joblib",
-    "xgboost",
+    "xgboost-cpu==3.4.1",
     "pymongo",
     "pyjwt",
     "pwdlib[argon2]",

@@ -1,6 +1,10 @@
 fastapi
 pydantic
 numpy
-scikit-learn
+scipy
 joblib
 xgboost
+pymongo
+pyjwt
+pwdlib[argon2]
+email-validator

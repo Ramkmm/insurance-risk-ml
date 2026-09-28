@@ -613,27 +613,21 @@ def predict(
     data: InsuranceInput,
     current_user=Depends(get_current_user)
 ):
-
     logger.info(
         f"📨 Prediction request from "
         f"{current_user['email']}: {data.model_dump()}"
     )
 
     if model is None:
-
         raise HTTPException(
             status_code=503,
-            detail=(
-                "Model not available. "
-                "Check /health"
-            )
+            detail="Model not available. Check /health"
         )
 
     try:
-
-        # Build feature vector in same order
-        # as model training
-
+        # --------------------------------------------------------
+        # Build feature vector in the same order as model training
+        # --------------------------------------------------------
         input_data = np.array(
             [[
                 data.house_age,
@@ -645,16 +639,32 @@ def predict(
             dtype=np.float64
         )
 
-        prediction = model.predict(
-            input_data
-        )[0]
+        # --------------------------------------------------------
+        # Continuous ML risk probability
+        # --------------------------------------------------------
+        if hasattr(model, "predict_proba"):
+            probabilities = model.predict_proba(
+                input_data
+            )[0]
 
-        risk_score = float(
-            prediction
-        )
+            # Binary XGBoost classifier:
+            # probabilities[0] = Low Risk probability
+            # probabilities[1] = High Risk probability
+            risk_score = float(
+                probabilities[1]
+            )
 
-        # Clamp risk score
+        else:
+            # Fallback for models without predict_proba
+            prediction = model.predict(
+                input_data
+            )[0]
 
+            risk_score = float(
+                prediction
+            )
+
+        # Keep risk score between 0 and 1
         risk_score = max(
             0.0,
             min(
@@ -663,41 +673,48 @@ def predict(
             )
         )
 
-        # Premium calculation
+        # --------------------------------------------------------
+        # Risk category
+        # --------------------------------------------------------
+        if risk_score < 0.3:
+            risk_category = "Low Risk"
 
-        base_rate = 0.01
+        elif risk_score < 0.7:
+            risk_category = "Medium Risk"
 
-        risk_multiplier = (
-            0.05
-            + risk_score * 0.10
-        )
+        else:
+            risk_category = "High Risk"
 
-        value = (
-            data.property_value
-            * (
-                base_rate
-                + risk_multiplier
-            )
+        # --------------------------------------------------------
+        # Illustrative annual premium calculation
+        #
+        # Property value is entered in Indian rupees.
+        #
+        # 0% risk   -> 0.25%
+        # 100% risk -> 0.75%
+        #
+        # This is a demo estimate and NOT an actuarial quote.
+        # --------------------------------------------------------
+        premium_rate = (
+            0.0025
+            + (risk_score * 0.0050)
         )
 
         recommended_premium = round(
-            value,
+            data.property_value * premium_rate,
             2
         )
 
-        # -----------------------------
-        # FEATURE IMPORTANCE
-        # -----------------------------
-
+        # --------------------------------------------------------
+        # Feature importance
+        # --------------------------------------------------------
         feature_importance = None
 
         try:
-
             if hasattr(
                 model,
                 "feature_importances_"
             ):
-
                 importances = (
                     model.feature_importances_
                 )
@@ -707,89 +724,83 @@ def predict(
                     and "feature_names"
                     in metadata
                 ):
-
                     feature_names = (
-                        metadata[
-                            "feature_names"
-                        ]
+                        metadata["feature_names"]
                     )
 
                 else:
-
                     feature_names = [
-
                         "house_age",
-
                         "location_risk",
-
                         "roof_type",
-
                         "past_claims",
-
                         "property_value",
-
                     ]
 
                 if len(importances) == len(
                     feature_names
                 ):
-
                     feature_importance = {
-
                         name: float(imp)
-
-                        for name, imp
-                        in zip(
+                        for name, imp in zip(
                             feature_names,
                             importances
                         )
                     }
 
         except Exception as fe:
-
             logger.warning(
                 f"Feature importance failed: {fe}"
             )
 
             feature_importance = None
 
+        # --------------------------------------------------------
+        # API response
+        # --------------------------------------------------------
         response = {
-
             "risk_score": round(
                 risk_score,
                 4
             ),
 
-            "risk_category": (
-
-                "Low Risk"
-                if risk_score < 0.3
-
-                else "Medium Risk"
-                if risk_score < 0.7
-
-                else "High Risk"
+            "risk_percentage": round(
+                risk_score * 100,
+                2
             ),
 
-            "recommended_premium":
-                recommended_premium,
+            "risk_category": risk_category,
 
-            "property_value":
-                round(
-                    float(
-                        data.property_value
-                    ),
-                    2
+            "recommended_premium": (
+                recommended_premium
+            ),
+
+            "premium_rate": (
+                premium_rate
+            ),
+
+            "premium_frequency": (
+                "annual"
+            ),
+
+            "property_value": round(
+                float(
+                    data.property_value
                 ),
+                2
+            ),
 
-            "input_summary":
-                data.model_dump(),
+            "input_summary": (
+                data.model_dump()
+            ),
 
-            "feature_importance":
-                feature_importance,
+            "feature_importance": (
+                feature_importance
+            ),
 
-            "user":
-                current_user["email"],
+            "user": (
+                current_user["email"]
+            ),
         }
 
         logger.info(
@@ -799,7 +810,6 @@ def predict(
         return response
 
     except Exception as e:
-
         logger.exception(
             f"Prediction failed: {e}"
         )

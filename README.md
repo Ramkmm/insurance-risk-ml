@@ -1,8 +1,8 @@
-# 🏠 Insurance Housing Risk Prediction System
+# 🏠 Insurance Housing Risk Prediction System 
 
 ## 📌 Overview
 
-This project is an end-to-end **Machine Learning application** that predicts housing insurance risk based on property details.
+This project is an end-to-end **Machine Learning application** that predicts housing insurance risk based on property details.Vercel for testing and streamlit and AWS for production.
 
 It integrates:
 

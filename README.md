@@ -20,7 +20,7 @@ It integrates:
 
 ### 🌐 Frontend (Streamlit UI)
 
-👉 https://houseinsurancerisk.site/app
+👉 https://houseinsurancerisk.site
 
 ### ⚡ API (FastAPI Docs)
 
